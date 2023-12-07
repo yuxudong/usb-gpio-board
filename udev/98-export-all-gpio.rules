@@ -1,0 +1,2 @@
+#SUBSYSTEM=="gpio", ATTR{label}=="gpio-12", ACTION=="add", RUN+="/bin/sh -c 'echo ($basename $devpath) | grep -oP \"gpiochip[0-9]+\" | xargs -I {} echo {} > /sys/class/gpio/export'"
+SUBSYSTEM=="gpio", ATTR{label}=="gpio-12", ACTION=="add", RUN+="/root/export_gpio.sh %k $attr{base} $attr{ngpio}"
