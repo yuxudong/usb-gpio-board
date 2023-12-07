@@ -26,6 +26,7 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/spinlock.h>
+#include <linux/mutex.h>
 
 #include "../../firmware/common.h"
 
@@ -47,6 +48,7 @@ struct my_usb
    u8 buf[3];
    u32 timeout;
    spinlock_t lock;
+   struct mutex mutex;
 };
 
 static void
@@ -56,8 +58,10 @@ _gpioa_set(struct gpio_chip *chip,
    struct my_usb *data = container_of(chip, struct my_usb, chip);
    static uint8_t gpio_val;
    int ret;
+   //unsigned int flags;
 
-   spin_lock(&data->lock);
+   //spin_lock_irqsave(&data->lock, flags);
+   mutex_lock(&data->mutex);
 
    gpio_val = value;
    ret = usb_control_msg(data->udev,
@@ -72,7 +76,8 @@ _gpioa_set(struct gpio_chip *chip,
                          (offset + 1) | (gpio_val << 8), 0,
                          (u8 *)data->buf, 3,
                          data->timeout);
-   spin_unlock(&data->lock);
+   //spin_unlock_irqrestore(&data->lock, flags);
+   mutex_unlock(&data->mutex);
 
    if (ret != sizeof(gpiopktheader))
      dev_err(chip->parent, "usb error setting pin value\n");
@@ -85,10 +90,12 @@ _gpioa_get(struct gpio_chip *chip,
    struct my_usb *data = container_of(chip, struct my_usb, chip);
    gpiopktheader *pkt;
    int ret;
+   //unsigned int flags;
 
    printk(KERN_INFO "GPIO GET INFO: %d", offset);
 
-   spin_lock(&data->lock);
+   //spin_lock_irqsave(&data->lock, flags);
+   mutex_lock(&data->mutex);
    ret = usb_control_msg(data->udev,
                          usb_sndctrlpipe(data->udev, 0),
                          GPIO_READ, USB_TYPE_VENDOR | USB_DIR_OUT,
@@ -101,7 +108,8 @@ _gpioa_get(struct gpio_chip *chip,
                          (offset + 1), 0,
                          (u8 *)data->buf, 3,
                          data->timeout);
-   spin_unlock(&data->lock);
+   //spin_unlock_irqrestore(&data->lock, flags);
+   mutex_unlock(&data->mutex);
 
    pkt = (gpiopktheader *)data->buf;
 
@@ -120,8 +128,10 @@ _direction_output(struct gpio_chip *chip,
 {
    struct my_usb *data = container_of(chip, struct my_usb, chip);
    int ret;
+   //unsigned int flags;
 
-   spin_lock(&data->lock);
+   //spin_lock_irqsave(&data->lock, flags);
+   mutex_lock(&data->mutex);
 
    ret = usb_control_msg(data->udev,
                          usb_sndctrlpipe(data->udev, 0),
@@ -140,7 +150,8 @@ _direction_output(struct gpio_chip *chip,
                          (u8 *)data->buf, 3,
                          data->timeout);
 
-   spin_unlock(&data->lock);
+   //spin_unlock_irqrestore(&data->lock, flags);
+   mutex_unlock(&data->mutex);
 
    if (ret != sizeof(gpiopktheader) - 1)
      {
@@ -157,8 +168,10 @@ _direction_input(struct gpio_chip *chip,
 {
    struct my_usb *data = container_of(chip, struct my_usb, chip);
    int ret;
+   //unsigned int flags;
 
-   spin_lock(&data->lock);
+   //spin_lock_irqsave(&data->lock, flags);
+   mutex_lock(&data->mutex);
    ret = usb_control_msg(data->udev,
                          usb_sndctrlpipe(data->udev, 0),
                          GPIO_INPUT, USB_TYPE_VENDOR | USB_DIR_OUT,
@@ -175,7 +188,8 @@ _direction_input(struct gpio_chip *chip,
                          (offset + 1), 0,
                          (u8 *)data->buf, 3,
                          data->timeout);
-   spin_unlock(&data->lock);
+   //spin_unlock_irqrestore(&data->lock, flags);
+   mutex_unlock(&data->mutex);
 
    if (ret != sizeof(gpiopktheader) - 1)
      {
@@ -194,6 +208,7 @@ my_usb_probe(struct usb_interface *interface,
    struct usb_host_interface *iface_desc;
    struct my_usb *data;
    int ret;
+   //unsigned int flags;
 
    printk(KERN_INFO "manufacturer: %s", udev->manufacturer);
    printk(KERN_INFO "product: %s", udev->product);
@@ -237,9 +252,11 @@ my_usb_probe(struct usb_interface *interface,
    usb_set_intfdata(interface, data);
 
    spin_lock_init(&data->lock);
+   mutex_init(&data->mutex);
 
    //init the board
-   spin_lock(&data->lock);
+   //spin_lock_irqsave(&data->lock, flags);
+   mutex_lock(&data->mutex);
    ret = usb_control_msg(data->udev, usb_sndctrlpipe(data->udev, 0),
                          BOARD_INIT, USB_TYPE_VENDOR | USB_DIR_OUT,
                          0, 0,
@@ -255,7 +272,8 @@ my_usb_probe(struct usb_interface *interface,
                          0, 0,
                          (u8 *)data->buf, 3,
                          data->timeout);
-   spin_unlock(&data->lock);
+   //spin_unlock_irqrestore(&data->lock, flags);
+   mutex_unlock(&data->mutex);
 
    if (ret != sizeof(gpiopktheader) - 2)
      {
